@@ -88,6 +88,17 @@ export function nearestCityLabel(lat, lon) {
   return bestD < 150 ? `Near ${cityLabel(best)}` : 'Pinned location';
 }
 
+export function countryByName(name) {
+  return (typeof name === 'string' && COUNTRY_BY_NAME.get(norm(name.trim()))) || null;
+}
+
+/** Every name a country goes by (normalized), for checking the text really names it. */
+export function countryNames(cc) {
+  const out = [];
+  for (const [k, v] of COUNTRY_BY_NAME) if (v.cc === cc) out.push(k);
+  return out;
+}
+
 export function countryByCode(cc) {
   return (typeof cc === 'string' && COUNTRY_BY_CODE.get(cc.toUpperCase())) || null;
 }

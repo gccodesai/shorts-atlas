@@ -174,6 +174,18 @@ test('AI geocoder places what the rules missed and refines country-level answers
   assert.equal(data.stats.ai.accepted, 1);
 });
 
+test('ai-first mode lets the AI override text-matched rule answers (never creator-set locations)', async () => {
+  let sentCount = 0;
+  const ai = { mode: 'ai-first', run: async (model, input) => {
+    sentCount = (input.messages[1].content.match(/"i":/g) || []).length;
+    return { response: { places: [{ i: 0, city: 'Guadalajara', country: 'MX', evidence: 'Mexico' }] } };
+  } };
+  const data = await (await handle(req({ q: 'street food' }), ENV, ctx(), { fetch: fakeYouTube().fetch, cache: memoryCache(), ai })).json();
+  assert.equal(sentCount, 2, 'the exact-location video is never sent');
+  assert.equal(data.results.find((r) => r.id === 'aaaaaaaaaaa').place.precision, 'exact');
+  assert.equal(data.results.find((r) => r.id === 'bbbbbbbbbbb').place.label, 'Guadalajara, Mexico');
+});
+
 test('an AI failure still returns the rule-based results', async () => {
   const ai = { run: async () => { throw new Error('AI down'); } };
   const res = await handle(req({ q: 'street food' }), ENV, ctx(), { fetch: fakeYouTube().fetch, cache: memoryCache(), ai });

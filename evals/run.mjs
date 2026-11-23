@@ -3,18 +3,20 @@
 //   node evals/run.mjs                      rules only (offline, no keys)
 //   node evals/run.mjs --ai                 + AI and hybrid (needs CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN)
 //   node evals/run.mjs --ai --models a,b    compare several Workers AI models
+//   node evals/run.mjs --ai --batch 10      videos per AI call (default: the app's)
 //
 // Writes evals/results/latest.md and latest.json.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { locate } from '../worker/src/geocode.js';
-import { aiGeocode, restRunner, resolveAiPlace, DEFAULT_MODEL } from '../worker/src/aigeo.js';
+import { aiGeocode, restRunner, resolveAiPlace, DEFAULT_MODEL, DEFAULT_BATCH } from '../worker/src/aigeo.js';
 
 const args = process.argv.slice(2);
 const withAI = args.includes('--ai');
 const models = (args[args.indexOf('--models') + 1] && args.includes('--models'))
   ? args[args.indexOf('--models') + 1].split(',').map((s) => s.trim()).filter(Boolean)
   : [process.env.AI_MODEL || DEFAULT_MODEL];
-const BATCH = 25; // production sends up to 50 per call; smaller batches keep eval runs robust
+const argVal = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
+const BATCH = Number(argVal('--batch')) || DEFAULT_BATCH; // same batching as the app
 const CITY_KM = 50;
 
 // Neurons per million tokens [input, output], from the Workers AI pricing page (Nov 2026).
@@ -58,27 +60,31 @@ function rulesPlace(c) {
   return locate({ title: c.title, tags: c.tags, description: c.description });
 }
 
+// Like the app: up to 50 videos per search, split into parallel calls of BATCH.
 async function aiPlaces(cases, run, model) {
   const out = new Map();
+  const proposals = new Map();
   const usage = { prompt_tokens: 0, completion_tokens: 0 };
-  let calls = 0, ms = 0, errors = 0;
-  const rejected = { evidence: 0, unresolved: 0, invalid: 0 };
-  for (let i = 0; i < cases.length; i += BATCH) {
-    const batch = cases.slice(i, i + BATCH);
-    const { places, stats } = await aiGeocode(batch.map((c) => ({ title: c.title, tags: c.tags, description: c.description })), { run, model, timeoutMs: 60000 });
-    calls++; ms += stats.ms;
-    if (stats.error) { errors++; console.error(`  batch ${i / BATCH + 1}: ${stats.error}`); }
+  let calls = 0, ms = 0, errors = 0, injectionStripped = 0;
+  const rejected = { evidence: 0, unresolved: 0, vague: 0, invalid: 0 };
+  for (let i = 0; i < cases.length; i += 50) {
+    const chunk = cases.slice(i, i + 50);
+    const { places, stats, trace } = await aiGeocode(chunk.map((c) => ({ title: c.title, tags: c.tags, description: c.description })),
+      { run, model, timeoutMs: 60000, batchSize: BATCH, debug: true });
+    calls += stats.calls; ms += stats.ms; injectionStripped += stats.injectionStripped;
+    if (stats.error) { errors++; console.error(`  ${stats.error}`); }
     for (const k of Object.keys(rejected)) rejected[k] += stats.rejected[k];
     usage.prompt_tokens += stats.usage?.prompt_tokens || 0;
     usage.completion_tokens += stats.usage?.completion_tokens || 0;
-    for (const [k, place] of places) out.set(batch[k].id, place);
+    for (const [k, place] of places) out.set(chunk[k].id, place);
+    for (const t of trace) if (Number.isInteger(t.i) && chunk[t.i]) proposals.set(chunk[t.i].id, t);
   }
   const rate = NEURONS_PER_M[model];
   const neurons = rate ? Math.round((usage.prompt_tokens * rate[0] + usage.completion_tokens * rate[1]) / 1e6) : null;
-  return { places: out, meta: { calls, ms, errors, usage, neurons, rejected } };
+  return { places: out, proposals, meta: { calls, ms, errors, usage, neurons, rejected, injectionStripped, batch: BATCH } };
 }
 
-function score(name, cases, placeOf, meta = null) {
+function score(name, cases, placeOf, meta = null, proposals = null) {
   const verdicts = cases.map((c) => ({ c, place: placeOf(c), verdict: null }));
   for (const v of verdicts) v.verdict = judge(v.c, v.place);
   const located = verdicts.filter((v) => v.c.expect);
@@ -104,7 +110,11 @@ function score(name, cases, placeOf, meta = null) {
     counts: { located: located.length, none: none.length, placed: placed.length },
     byCategory,
     failures: verdicts.filter((v) => !['correct', 'correct_none'].includes(v.verdict))
-      .map((v) => ({ id: v.c.id, title: v.c.title, verdict: v.verdict, got: v.place?.label ?? null, evidence: v.place?.evidence ?? null })),
+      .map((v) => {
+        const p = proposals?.get(v.c.id);
+        return { id: v.c.id, title: v.c.title, verdict: v.verdict, got: v.place?.label ?? null, evidence: v.place?.evidence ?? null,
+          model: p ? `${p.city ?? 'null'} / ${p.country ?? '?'} / “${p.evidence ?? ''}” → ${p.outcome}` : null };
+      }),
     meta,
   };
 }
@@ -122,8 +132,10 @@ async function main() {
       console.error(`AI: ${model}`);
       const ai = await aiPlaces(CASES, run, model);
       const short = model.split('/').pop();
-      reports.push(score(`AI only (${short})`, CASES, (c) => ai.places.get(c.id) || null, ai.meta));
-      // Hybrid = production: rules first; AI for misses and country-level rules answers.
+      reports.push(score(`AI only (${short})`, CASES, (c) => ai.places.get(c.id) || null, ai.meta, ai.proposals));
+      // AI-first (GEOCODER_MODE=ai-first): every video goes to the AI; its answer wins, rules fill gaps.
+      reports.push(score(`AI-first (${short})`, CASES, (c) => ai.places.get(c.id) || rules.get(c.id), ai.meta, ai.proposals));
+      // Hybrid (default): rules first; AI only for misses and country-level rule answers.
       const needsAI = (p) => !p || p.level === 'country';
       const todo = CASES.filter((c) => needsAI(rules.get(c.id)));
       const hy = await aiPlaces(todo, run, model);
@@ -133,7 +145,7 @@ async function main() {
         if (!a) return r;
         if (r && a.level !== 'city') return r;
         return a;
-      }, { ...hy.meta, aiShare: `${todo.length}/${CASES.length} cases sent to AI` }));
+      }, { ...hy.meta, aiShare: `${todo.length}/${CASES.length} cases sent to AI` }, hy.proposals));
     }
   }
 
@@ -145,7 +157,7 @@ async function main() {
 
 function toMarkdown(reports) {
   const L = [];
-  L.push(`# Geocoder eval results`, '', `${CASES.length} hand-labelled cases · run ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`, '');
+  L.push(`# Geocoder eval results`, '', `${CASES.length} hand-labelled cases · ${BATCH} videos per AI call · run ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`, '');
   L.push('| Pipeline | Useful pins | Coverage | Precision | Right country | False placements | AI calls | Neurons | AI time |');
   L.push('|---|---|---|---|---|---|---|---|---|');
   for (const r of reports) {
@@ -162,10 +174,12 @@ function toMarkdown(reports) {
   }
   for (const r of reports) {
     L.push('', `## Misses: ${r.name}`, '');
-    if (r.meta?.rejected) L.push(`AI proposals rejected by validation: ${JSON.stringify(r.meta.rejected)}${r.meta.errors ? ` · failed calls: ${r.meta.errors}` : ''}${r.meta.aiShare ? ` · ${r.meta.aiShare}` : ''}`, '');
+    if (r.meta?.rejected) L.push(`AI proposals rejected by validation: ${JSON.stringify(r.meta.rejected)} · instruction passages stripped: ${r.meta.injectionStripped ?? 0}${r.meta.errors ? ` · failed calls: ${r.meta.errors}` : ''}${r.meta.aiShare ? ` · ${r.meta.aiShare}` : ''}`, '');
     if (!r.failures.length) { L.push('None.'); continue; }
-    L.push('| Case | Title | Verdict | Got |', '|---|---|---|---|');
-    for (const f of r.failures) L.push(`| ${f.id} | ${f.title.replace(/\|/g, '\\|').slice(0, 60)} | ${f.verdict} | ${f.got ?? '–'}${f.evidence ? ` (from “${f.evidence}”)` : ''} |`);
+    const withModel = r.failures.some((f) => f.model);
+    L.push(`| Case | Title | Verdict | Got |${withModel ? ' Model said (city / country / evidence → outcome) |' : ''}`, `|---|---|---|---|${withModel ? '---|' : ''}`);
+    const esc = (x) => String(x).replace(/\|/g, '\\|');
+    for (const f of r.failures) L.push(`| ${f.id} | ${esc(f.title).slice(0, 60)} | ${f.verdict} | ${f.got ? esc(f.got) : '–'}${f.evidence ? ` (from “${esc(f.evidence)}”)` : ''} |${withModel ? ` ${f.model ? esc(f.model) : '(nothing)'} |` : ''}`);
   }
   return L.join('\n') + '\n';
 }

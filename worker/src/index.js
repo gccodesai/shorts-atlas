@@ -3,7 +3,7 @@
 // method/origin/size -> rate limit -> Turnstile -> guardrails -> cache -> YouTube.
 import { validateQuery } from './guardrails.js';
 import { searchShorts, QuotaError } from './youtube.js';
-import { DEFAULT_MODEL } from './aigeo.js';
+import { DEFAULT_MODEL, DEFAULT_BATCH } from './aigeo.js';
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24; // repeat searches cost no quota for a day
 const MAX_BODY_BYTES = 2048;
@@ -31,6 +31,7 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
       turnstileOn: Boolean(env.TURNSTILE_SECRET),
       aiGeocoder: Boolean(aiOptions(env)),
       aiModel: aiOptions(env)?.model || null,
+      geocoderMode: aiOptions(env)?.mode || 'rules',
       allowedOrigins: (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
     }, 200, cors);
   }
@@ -111,14 +112,20 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
 
 function aiOptions(env) {
   if (!env.AI || env.AI_GEOCODER === 'off') return null;
-  return { run: (model, input) => env.AI.run(model, input), model: env.AI_MODEL || DEFAULT_MODEL };
+  return {
+    run: (model, input) => env.AI.run(model, input),
+    model: env.AI_MODEL || DEFAULT_MODEL,
+    batchSize: Number(env.AI_BATCH) || DEFAULT_BATCH,
+    mode: env.GEOCODER_MODE === 'ai-first' ? 'ai-first' : 'hybrid',
+  };
 }
 
 function publicStats(stats) {
   return {
     placedByRules: stats.placedByRules,
     placedByAI: stats.placedByAI,
-    ai: stats.ai ? { tried: stats.ai.tried, accepted: stats.ai.accepted, ms: stats.ai.ms, model: stats.ai.model, failed: Boolean(stats.ai.error) } : null,
+    ai: stats.ai ? { tried: stats.ai.tried, calls: stats.ai.calls, accepted: stats.ai.accepted, ms: stats.ai.ms, model: stats.ai.model,
+      injectionStripped: stats.ai.injectionStripped, failed: Boolean(stats.ai.error) } : null,
   };
 }
 

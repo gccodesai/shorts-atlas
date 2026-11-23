@@ -62,11 +62,14 @@ export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResult
   const stats = emptyStats();
   for (const r of results) if (r.place) stats.placedByRules++;
 
-  // Second pass: the AI geocoder reads videos the rules missed, or placed only at country level.
+  // Second pass: the AI geocoder.
+  //   hybrid (default): only videos the rules missed or placed at country level
+  //   ai-first:         every video without a creator-set location; AI answers win
   if (ai?.run) {
+    const aiFirst = ai.mode === 'ai-first';
     const todo = [];
     results.forEach((r, idx) => {
-      if (!r.place || r.place.level === 'country' || r.place.precision === 'country') todo.push(idx);
+      if (aiFirst ? r.place?.precision !== 'exact' : (!r.place || r.place.level === 'country')) todo.push(idx);
     });
     if (todo.length) {
       const { places, stats: aiStats } = await aiGeocode(todo.map((idx) => {
@@ -77,7 +80,7 @@ export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResult
       for (const [k, place] of places) {
         const r = results[todo[k]];
         const had = Boolean(r.place);
-        if (had && place.level !== 'city') continue; // never trade a known country for an AI country
+        if (had && !aiFirst && place.level !== 'city') continue; // never trade a known country for an AI country
         r.place = place;
         if (had) stats.placedByRules--;
         stats.placedByAI++;

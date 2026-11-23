@@ -7,8 +7,11 @@ compatibility_date = "2026-11-01"
 binding = "AI"
 
 [vars]
-# Set to "off" to turn the AI geocoder off. AI_MODEL overrides the default model.
+# AI geocoder: "off" turns it off. GEOCODER_MODE is "hybrid" (AI fills rule gaps) or
+# "ai-first" (AI answers win, rules fill AI gaps); pick from evals/results/latest.md.
+# Optional: AI_MODEL (Workers AI model id), AI_BATCH (videos per call, default 20).
 AI_GEOCODER = "on"
+GEOCODER_MODE = "hybrid"
 # Comma-separated list of sites allowed to call the API. For local testing:
 # npx wrangler dev --var ALLOWED_ORIGINS:http://localhost:8080 --var YOUTUBE_API_KEY:your-key
 ALLOWED_ORIGINS = "https://shorts-atlas.pages.dev"
