@@ -138,6 +138,16 @@ test('logs outcomes, never the query or IP', async () => {
   }
 });
 
+test('health check reports setup without revealing the key', async () => {
+  const res = await handle(new Request('https://api.example/api/health'), ENV, ctx());
+  const body = await res.text();
+  assert.equal(res.status, 200);
+  assert.equal(JSON.parse(body).youtubeKeySet, true);
+  assert.equal(body.includes('test-key'), false);
+  const missing = await handle(new Request('https://api.example/api/health'), { ALLOWED_ORIGINS: ORIGIN }, ctx());
+  assert.equal((await missing.json()).youtubeKeySet, false);
+});
+
 test('parses ISO durations', () => {
   assert.equal(isoSeconds('PT45S'), 45);
   assert.equal(isoSeconds('PT1M5S'), 65);

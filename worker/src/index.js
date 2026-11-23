@@ -21,6 +21,15 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
   const cors = corsHeaders(origin, env);
   const url = new URL(request.url);
 
+  // Setup check, safe to open in a browser: says whether the key is present, never what it is.
+  if (url.pathname === '/api/health' && request.method === 'GET') {
+    return json({
+      ok: Boolean(env.YOUTUBE_API_KEY),
+      youtubeKeySet: Boolean(env.YOUTUBE_API_KEY),
+      turnstileOn: Boolean(env.TURNSTILE_SECRET),
+      allowedOrigins: (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
+    }, 200, cors);
+  }
   if (url.pathname !== '/api/search') return json({ code: 'not_found' }, 404, cors);
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (request.method !== 'POST') return json({ code: 'method' }, 405, cors);
