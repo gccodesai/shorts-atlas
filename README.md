@@ -4,6 +4,10 @@ Type a word, song title or theme. Shorts Atlas finds YouTube Shorts about it, pu
 world map and plays them in place. Every pin says how sure we are about its location, and an
 **AI geocoder**, measured against a rule-based baseline, places the Shorts that rules can't.
 
+**Eval headline** (82 hand-labelled stress cases, Llama 3.1 8B on Workers AI's free tier): correct
+pins went from **39% → 91%**, wrong pins on videos with no real place from **40% → 0%**, at 100%
+precision, in ~4 s and ~60 Neurons for all 82 videos. [How we got there ↓](#results-so-far)
+
 **Live demo:** [shorts-atlas.pages.dev](https://shorts-atlas.pages.dev) · **Cost to run:** $0
 
 ## How it works
@@ -138,9 +142,32 @@ What run 2 showed, and what changed for run 3:
 | **My mistake:** the prompt's examples reused eval cases ("Paris Hilton", "biryani", "東京", "Khao San Road"), which flatters the scores | New held-out examples, plus a test that fails if any eval case's words appear in the prompt. Run 3 numbers are the honest ones |
 | 70B is clearly better but ~6x the Neurons and ~2x slower | Both stay in the default eval run; the live model is picked from run 3 |
 
-The baseline is still the point of comparison: when rules place something they're almost always
-right (96%), but they place only 40% of the videos that name a place and pin 40% of the
-no-location ones anyway.
+**Run 3** (held-out prompt examples, ai-verified mode) is the honest result:
+
+| Pipeline | Useful pins | Precision | False placements | Neurons (82 cases) | AI time |
+|---|---|---|---|---|---|
+| Rules only | 39% | 96% | 40% | 0 | – |
+| **AI-verified, Llama 3.1 8B** (live) | **91%** | **100%** | **0%** | **58** | **4 s** |
+| Hybrid, Llama 3.1 8B | 75% | 100% | 40% | 47 | 4 s |
+| AI-verified, Llama 3.3 70B | 100% | 100% | 4% | 429 | 23 s |
+| Hybrid, Llama 3.3 70B | 100% | 100% | 40% | 289 | 21 s |
+| Qwen3 30B (either mode) | 39%: every AI call failed, so the rules answered | | | 0 | – |
+
+**Decision: AI-verified mode with Llama 3.1 8B.**
+- **Mode:** AI-verified wins for both models. Hybrid keeps the rules' look-alike pins, so its false
+  placements stay at 40% however good the model is.
+- **Model:** 70B places 7 more cases correctly (all landmarks/other scripts/countries) but costs
+  ~7x the Neurons and ~5x the latency. On the free tier that's roughly 38 fresh searches a day
+  instead of 250+, and a user waits ~10 s instead of ~2 s. The 8B model has **zero** false
+  placements, so its misses are honest gaps (unplaced videos) rather than wrong pins. `AI_MODEL`
+  switches to 70B in one line if the budget allows.
+- **What's left:** the 8B model misses some Cyrillic ("Москве"), countries named in passing
+  ("…across Peru"), and two titles where an injection attempt was stripped. 70B's one error is
+  "Dubai chocolate", a product named after a city, which is arguably a labelling question.
+
+**Caveats:** 82 cases, one run per configuration, and a set built around known failure modes rather
+than a random sample of YouTube. A difference of a few points is 2–3 cases. The next step is a
+second, hand-labelled set sampled from real searches.
 
 ## Guardrails
 
@@ -237,7 +264,8 @@ tests/            # node:test, no network, fake YouTube and fake model
 - [ ] Shareable result links with a preview image
 - [x] LLM geocoder for titles the gazetteer misses, measured against the rule-based one
 - [x] Choose the geocoder mode from evals (run 2: ai-verified)
-- [ ] Choose 8B vs 70B from run 3 (quality vs Neurons and latency)
+- [x] Choose 8B vs 70B from run 3: 8B (91% vs 100% useful pins at 1/7 the Neurons and 1/5 the latency)
+- [ ] Budget-aware cascade: 70B while the day's free Neurons last, then 8B
 - [ ] A second eval set sampled from real searches, labelled by hand
 - [ ] Instagram Reels as a second source, if Meta approves API access
 
