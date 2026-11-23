@@ -1,0 +1,298 @@
+{
+ "query": "street food",
+ "demo": true,
+ "results": [
+  {
+   "id": "demo-1",
+   "demo": true,
+   "title": "Sample Short 1 · Taipei",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 25.0478,
+    "lon": 121.5319,
+    "label": "Taipei, Taiwan",
+    "precision": "exact"
+   }
+  },
+  {
+   "id": "demo-2",
+   "demo": true,
+   "title": "Sample Short 2 · Taipei",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 25.04,
+    "lon": 121.56,
+    "label": "Taipei, Taiwan",
+    "precision": "exact"
+   }
+  },
+  {
+   "id": "demo-3",
+   "demo": true,
+   "title": "Sample Short 3 · Bangkok",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 13.754,
+    "lon": 100.5014,
+    "label": "Bangkok, Thailand",
+    "precision": "exact"
+   }
+  },
+  {
+   "id": "demo-4",
+   "demo": true,
+   "title": "Sample Short 4 · Bangkok",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 13.73,
+    "lon": 100.52,
+    "label": "Bangkok, Thailand",
+    "precision": "place"
+   }
+  },
+  {
+   "id": "demo-5",
+   "demo": true,
+   "title": "Sample Short 5 · Bangkok",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 13.76,
+    "lon": 100.49,
+    "label": "Bangkok, Thailand",
+    "precision": "exact"
+   }
+  },
+  {
+   "id": "demo-6",
+   "demo": true,
+   "title": "Sample Short 6 · Mumbai",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 19.0728,
+    "lon": 72.8826,
+    "label": "Mumbai, India",
+    "precision": "place"
+   }
+  },
+  {
+   "id": "demo-7",
+   "demo": true,
+   "title": "Sample Short 7 · Mumbai",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 19.05,
+    "lon": 72.85,
+    "label": "Mumbai, India",
+    "precision": "place"
+   }
+  },
+  {
+   "id": "demo-8",
+   "demo": true,
+   "title": "Sample Short 8 · Istanbul",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 41.0138,
+    "lon": 28.9497,
+    "label": "Istanbul, Türkiye",
+    "precision": "exact"
+   }
+  },
+  {
+   "id": "demo-9",
+   "demo": true,
+   "title": "Sample Short 9 · Mexico City",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 19.4285,
+    "lon": -99.1277,
+    "label": "Mexico City, Mexico",
+    "precision": "exact"
+   }
+  },
+  {
+   "id": "demo-10",
+   "demo": true,
+   "title": "Sample Short 10 · Mexico City",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 19.41,
+    "lon": -99.16,
+    "label": "Mexico City, Mexico",
+    "precision": "exact"
+   }
+  },
+  {
+   "id": "demo-11",
+   "demo": true,
+   "title": "Sample Short 11 · Lagos",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 6.4541,
+    "lon": 3.3947,
+    "label": "Lagos, Nigeria",
+    "precision": "place"
+   }
+  },
+  {
+   "id": "demo-12",
+   "demo": true,
+   "title": "Sample Short 12 · New York City",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 40.7143,
+    "lon": -74.006,
+    "label": "New York City, United States",
+    "precision": "exact"
+   }
+  },
+  {
+   "id": "demo-13",
+   "demo": true,
+   "title": "Sample Short 13 · Lima",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": -12.0432,
+    "lon": -77.0282,
+    "label": "Lima, Peru",
+    "precision": "place"
+   }
+  },
+  {
+   "id": "demo-14",
+   "demo": true,
+   "title": "Sample Short 14 · Seoul",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 37.566,
+    "lon": 126.9784,
+    "label": "Seoul, South Korea",
+    "precision": "exact"
+   }
+  },
+  {
+   "id": "demo-15",
+   "demo": true,
+   "title": "Sample Short 15 · Osaka",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 34.6937,
+    "lon": 135.5022,
+    "label": "Osaka, Japan",
+    "precision": "exact"
+   }
+  },
+  {
+   "id": "demo-16",
+   "demo": true,
+   "title": "Sample Short 16 · Hanoi",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 21.0245,
+    "lon": 105.8412,
+    "label": "Hanoi, Vietnam",
+    "precision": "place"
+   }
+  },
+  {
+   "id": "demo-17",
+   "demo": true,
+   "title": "Sample Short 17 · Cairo",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 30.0626,
+    "lon": 31.2497,
+    "label": "Cairo, Egypt",
+    "precision": "place"
+   }
+  },
+  {
+   "id": "demo-18",
+   "demo": true,
+   "title": "Sample Short 18 · France",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": 46,
+    "lon": 2,
+    "label": "France",
+    "precision": "country"
+   }
+  },
+  {
+   "id": "demo-19",
+   "demo": true,
+   "title": "Sample Short 19 · Australia",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": -27,
+    "lon": 133,
+    "label": "Australia",
+    "precision": "country"
+   }
+  },
+  {
+   "id": "demo-20",
+   "demo": true,
+   "title": "Sample Short 20 · Brazil",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": {
+    "lat": -10,
+    "lon": -55,
+    "label": "Brazil",
+    "precision": "country"
+   }
+  },
+  {
+   "id": "demo-u1",
+   "demo": true,
+   "title": "Sample Short with no location 1",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": null
+  },
+  {
+   "id": "demo-u2",
+   "demo": true,
+   "title": "Sample Short with no location 2",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": null
+  },
+  {
+   "id": "demo-u3",
+   "demo": true,
+   "title": "Sample Short with no location 3",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": null
+  },
+  {
+   "id": "demo-u4",
+   "demo": true,
+   "title": "Sample Short with no location 4",
+   "channel": "Sample channel",
+   "thumb": null,
+   "place": null
+  }
+ ]
+}

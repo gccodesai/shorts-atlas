@@ -1,0 +1,12 @@
+name = "shorts-atlas-api"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+# Comma-separated list of sites allowed to call the API (your Pages URL).
+ALLOWED_ORIGINS = "https://shorts-atlas.pages.dev,http://localhost:8080"
+
+# Secrets (set with `npx wrangler secret put NAME`, never committed):
+#   YOUTUBE_API_KEY   required
+#   TURNSTILE_SECRET  optional, turns on the bot check
+#   RATE_SALT         optional, any random string

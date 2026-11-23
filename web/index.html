@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shorts Atlas: where is the world filming it?</title>
+<meta name="description" content="Search a word, song title or theme and see YouTube Shorts about it on a world map.">
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<link rel="stylesheet" href="styles.css">
+<script src="config.js"></script>
+<script src="vendor/maplibre-gl-csp.js" defer></script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div class="intro">
+      <span class="brand">Shorts Atlas</span>
+      <h1 id="headline">What is the world filming?</h1>
+    </div>
+    <form id="search" class="search" novalidate>
+      <label for="q">Type a word, song title or theme</label>
+      <div class="search-row">
+        <input id="q" name="q" type="text" maxlength="64" autocomplete="off" spellcheck="false"
+               aria-describedby="q-hint q-error" placeholder="street food">
+        <button id="go" type="submit">Go</button>
+      </div>
+      <div class="search-meta" id="q-hint">
+        <span>Try:
+          <button type="button" class="try" data-q="street food">street food</button> ·
+          <button type="button" class="try" data-q="monsoon">monsoon</button> ·
+          <button type="button" class="try" data-q="skateboarding">skateboarding</button>
+        </span>
+        <span id="counter" aria-live="off">0 / 64</span>
+      </div>
+      <p class="privacy">No names, emails, phone numbers or links. Searches aren't stored.</p>
+      <p id="q-error" class="error" role="alert"></p>
+      <div id="turnstile" class="turnstile"></div>
+    </form>
+  </header>
+
+  <section class="map-wrap" aria-label="Map of Shorts">
+    <div id="map" class="map"></div>
+    <div class="legend" aria-hidden="true">
+      <span><i class="dot exact"></i>Exact</span>
+      <span><i class="dot place"></i>Place name</span>
+      <span><i class="dot country"></i>Country</span>
+    </div>
+    <p id="map-status" class="map-status" aria-live="polite"></p>
+    <p id="demo-banner" class="demo-banner" hidden>Demo mode: sample places, no real videos. Connect the API to search YouTube.</p>
+  </section>
+
+  <section class="strip-wrap" aria-labelledby="strip-title">
+    <div class="strip-head">
+      <h2 id="strip-title">Pick a Short and the map follows</h2>
+      <span id="strip-count"></span>
+    </div>
+    <div id="strip" class="strip" role="list"></div>
+    <p id="empty" class="empty">Search for something to fill the strip.</p>
+  </section>
+
+  <footer class="foot">
+    <span>Video data from YouTube. Locations come from the creator's recording location, places named in the video, or the channel's country.</span>
+    <a href="https://github.com/gccodesai/shorts-atlas">Source on GitHub</a>
+  </footer>
+</div>
+</body>
+</html>
