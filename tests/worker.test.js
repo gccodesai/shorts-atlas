@@ -157,11 +157,11 @@ test('load more: passes the page token, caches pages separately, validates token
   }
 });
 
-test('AI geocoder places what the rules missed and refines country-level answers', async () => {
+test('hybrid mode: the AI only fills the rules\' gaps', async () => {
   const yt = fakeYouTube();
   // videos: a=exact (not sent), b=Mexico City by rules (not sent), c=channel country only (sent)
   let sent;
-  const ai = { model: '@cf/test/model', run: async (model, input) => {
+  const ai = { mode: 'hybrid', model: '@cf/test/model', run: async (model, input) => {
     sent = input.messages[1].content;
     return { response: { places: [{ i: 0, city: 'Lagos', country: 'NG', evidence: 'Snack' }] } };
   } };
@@ -174,16 +174,22 @@ test('AI geocoder places what the rules missed and refines country-level answers
   assert.equal(data.stats.ai.accepted, 1);
 });
 
-test('ai-first mode lets the AI override text-matched rule answers (never creator-set locations)', async () => {
+test('ai-verified mode (default): the AI has the final say, except on creator-set locations', async () => {
   let sentCount = 0;
-  const ai = { mode: 'ai-first', run: async (model, input) => {
+  const ai = { run: async (model, input) => {
     sentCount = (input.messages[1].content.match(/"i":/g) || []).length;
-    return { response: { places: [{ i: 0, city: 'Guadalajara', country: 'MX', evidence: 'Mexico' }] } };
+    return { response: { places: [] } }; // AI: neither video names a real place
   } };
   const data = await (await handle(req({ q: 'street food' }), ENV, ctx(), { fetch: fakeYouTube().fetch, cache: memoryCache(), ai })).json();
   assert.equal(sentCount, 2, 'the exact-location video is never sent');
   assert.equal(data.results.find((r) => r.id === 'aaaaaaaaaaa').place.precision, 'exact');
-  assert.equal(data.results.find((r) => r.id === 'bbbbbbbbbbb').place.label, 'Guadalajara, Mexico');
+  assert.equal(data.results.find((r) => r.id === 'bbbbbbbbbbb').place, null, 'unconfirmed rule pin dropped');
+  assert.equal(data.results.find((r) => r.id === 'ccccccccccc').place.precision, 'country', 'channel country kept');
+  assert.equal(data.stats.droppedByAI, 1);
+
+  const ai2 = { run: async () => ({ response: { places: [{ i: 0, city: 'Guadalajara', country: 'MX', evidence: 'Mexico' }] } }) };
+  const d2 = await (await handle(req({ q: 'street food' }), ENV, ctx(), { fetch: fakeYouTube().fetch, cache: memoryCache(), ai: ai2 })).json();
+  assert.equal(d2.results.find((r) => r.id === 'bbbbbbbbbbb').place.label, 'Guadalajara, Mexico');
 });
 
 test('an AI failure still returns the rule-based results', async () => {

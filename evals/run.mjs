@@ -63,13 +63,14 @@ function rulesPlace(c) {
 // Like the app: up to 50 videos per search, split into parallel calls of BATCH.
 async function aiPlaces(cases, run, model) {
   const out = new Map();
+  const failedIds = new Set();
   const proposals = new Map();
   const usage = { prompt_tokens: 0, completion_tokens: 0 };
   let calls = 0, ms = 0, errors = 0, injectionStripped = 0;
   const rejected = { evidence: 0, unresolved: 0, vague: 0, invalid: 0 };
   for (let i = 0; i < cases.length; i += 50) {
     const chunk = cases.slice(i, i + 50);
-    const { places, stats, trace } = await aiGeocode(chunk.map((c) => ({ title: c.title, tags: c.tags, description: c.description })),
+    const { places, failed, stats, trace } = await aiGeocode(chunk.map((c) => ({ title: c.title, tags: c.tags, description: c.description })),
       { run, model, timeoutMs: 60000, batchSize: BATCH, debug: true });
     calls += stats.calls; ms += stats.ms; injectionStripped += stats.injectionStripped;
     if (stats.error) { errors++; console.error(`  ${stats.error}`); }
@@ -77,11 +78,12 @@ async function aiPlaces(cases, run, model) {
     usage.prompt_tokens += stats.usage?.prompt_tokens || 0;
     usage.completion_tokens += stats.usage?.completion_tokens || 0;
     for (const [k, place] of places) out.set(chunk[k].id, place);
+    for (const k of failed) failedIds.add(chunk[k].id);
     for (const t of trace) if (Number.isInteger(t.i) && chunk[t.i]) proposals.set(chunk[t.i].id, t);
   }
   const rate = NEURONS_PER_M[model];
   const neurons = rate ? Math.round((usage.prompt_tokens * rate[0] + usage.completion_tokens * rate[1]) / 1e6) : null;
-  return { places: out, proposals, meta: { calls, ms, errors, usage, neurons, rejected, injectionStripped, batch: BATCH } };
+  return { places: out, failed: failedIds, proposals, meta: { calls, ms, errors, usage, neurons, rejected, injectionStripped, batch: BATCH } };
 }
 
 function score(name, cases, placeOf, meta = null, proposals = null) {
@@ -132,9 +134,10 @@ async function main() {
       console.error(`AI: ${model}`);
       const ai = await aiPlaces(CASES, run, model);
       const short = model.split('/').pop();
-      reports.push(score(`AI only (${short})`, CASES, (c) => ai.places.get(c.id) || null, ai.meta, ai.proposals));
-      // AI-first (GEOCODER_MODE=ai-first): every video goes to the AI; its answer wins, rules fill gaps.
-      reports.push(score(`AI-first (${short})`, CASES, (c) => ai.places.get(c.id) || rules.get(c.id), ai.meta, ai.proposals));
+      // AI-verified (default GEOCODER_MODE): the AI has the final say; rule pins are kept
+      // only for videos whose AI call failed. (Eval cases have no channel country.)
+      reports.push(score(`AI-verified (${short})`, CASES,
+        (c) => ai.places.get(c.id) || (ai.failed.has(c.id) ? rules.get(c.id) : null), ai.meta, ai.proposals));
       // Hybrid (default): rules first; AI only for misses and country-level rule answers.
       const needsAI = (p) => !p || p.level === 'country';
       const todo = CASES.filter((c) => needsAI(rules.get(c.id)));

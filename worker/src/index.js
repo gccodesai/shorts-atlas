@@ -116,7 +116,7 @@ function aiOptions(env) {
     run: (model, input) => env.AI.run(model, input),
     model: env.AI_MODEL || DEFAULT_MODEL,
     batchSize: Number(env.AI_BATCH) || DEFAULT_BATCH,
-    mode: env.GEOCODER_MODE === 'ai-first' ? 'ai-first' : 'hybrid',
+    mode: env.GEOCODER_MODE === 'hybrid' ? 'hybrid' : 'ai-verified',
   };
 }
 
@@ -124,6 +124,7 @@ function publicStats(stats) {
   return {
     placedByRules: stats.placedByRules,
     placedByAI: stats.placedByAI,
+    droppedByAI: stats.droppedByAI,
     ai: stats.ai ? { tried: stats.ai.tried, calls: stats.ai.calls, accepted: stats.ai.accepted, ms: stats.ai.ms, model: stats.ai.model,
       injectionStripped: stats.ai.injectionStripped, failed: Boolean(stats.ai.error) } : null,
   };

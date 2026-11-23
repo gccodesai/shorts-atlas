@@ -167,3 +167,34 @@ test('batches run in parallel and map answers back to the right videos', async (
   assert.deepEqual([...places.keys()], [44]);
   assert.equal(places.get(44).label, 'Hanoi, Vietnam');
 });
+
+test('v2 fix: a city named only in the evidence must be the best-known town of that name', () => {
+  assert.equal(resolveProposal({ city: null, country: 'MA', evidence: 'Marrakech' }).place.label, 'Marrakesh, Morocco');
+  assert.equal(resolveProposal({ city: null, country: 'TH', evidence: 'Chiang Mai' }).place.level, 'city');
+  assert.equal(resolveProposal({ city: null, country: 'US', evidence: 'Paris Hilton' }).reject, 'vague'); // not Paris, Texas
+  assert.equal(resolveProposal({ city: 'Hallstatt', country: 'AT', evidence: 'Hallstatt' }).place.label, 'Austria'); // too small: country
+  assert.equal(resolveProposal({ city: 'Atlantis', country: 'GR', evidence: 'lost city' }).reject, 'vague');
+});
+
+test('failed batches are reported, so callers can fall back to rules for just those videos', async () => {
+  let n = 0;
+  const run = async () => { n++; if (n === 2) throw new Error('boom'); return { response: { places: [] } }; };
+  const vids = Array.from({ length: 30 }, (_, i) => ({ title: `v${i}` }));
+  const { failed } = await aiGeocode(vids, { run, batchSize: 20 });
+  assert.equal(failed.size, 10);
+  assert.ok(failed.has(29) && !failed.has(0));
+});
+
+test('prompt examples are held out: no eval case text appears in the prompt', async () => {
+  const { SYSTEM_PROMPT } = await import('../worker/src/aigeo.js');
+  const prompt = SYSTEM_PROMPT.toLowerCase();
+  const generic = new Set(['night', 'market', 'street', 'food', 'recipe', 'video', 'videos', 'city', 'country', 'inspired', 'tour', 'easy', 'highlights', 'goal', 'sunset', 'breakfast', 'road', 'trip', 'across', 'from', 'with', 'only', 'never', 'real', 'place', 'text', 'name', 'names', 'town', 'given', 'each', 'every', 'other', 'when', 'give', 'that', 'this', 'what', 'more', 'than', 'very', 'best', 'outfit', 'music', 'brand', 'team', 'holiday', 'dish', 'mark', 'evidence', 'instructions', 'victoria', 'beach']);
+  for (const c of CASES) {
+    // every distinctive word (4+ letters) and every non-Latin run of the case title
+    const words = c.title.toLowerCase().match(/[\p{L}\p{N}]{4,}|[^\p{Script=Latin}\p{P}\p{S}\p{N}\s]{2,}/gu) || [];
+    for (const w of words) {
+      if (generic.has(w)) continue;
+      assert.equal(prompt.includes(w), false, `${c.id}: "${w}" leaks into the prompt`);
+    }
+  }
+});

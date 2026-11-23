@@ -2,7 +2,7 @@
 //   search.list   -> up to 50 short videos per page (its own 100-calls/day bucket)
 //   videos.list   -> duration, embeddable flag, recording location, tags (1 unit)
 //   channels.list -> channel country, for the country-level fallback (1 unit)
-import { locate } from './geocode.js';
+import { locate, countryCentroid } from './geocode.js';
 import { aiGeocode } from './aigeo.js';
 
 const API = 'https://www.googleapis.com/youtube/v3';
@@ -60,38 +60,45 @@ export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResult
     };
   });
   const stats = emptyStats();
-  for (const r of results) if (r.place) stats.placedByRules++;
 
-  // Second pass: the AI geocoder.
-  //   hybrid (default): only videos the rules missed or placed at country level
-  //   ai-first:         every video without a creator-set location; AI answers win
+  // Second pass: the AI geocoder (modes compared in evals/results/latest.md).
+  //   ai-verified (default): every video without a creator-set location goes to the AI and
+  //       its answer is final. If it finds no place, a text-matched rule pin is dropped
+  //       (eval run 2: those were look-alikes like "Paris Hilton"); the channel-country pin
+  //       stays. If the AI call fails, the rule pins stand.
+  //   hybrid: only videos the rules missed or placed at country level.
   if (ai?.run) {
-    const aiFirst = ai.mode === 'ai-first';
+    const verified = ai.mode !== 'hybrid';
     const todo = [];
     results.forEach((r, idx) => {
-      if (aiFirst ? r.place?.precision !== 'exact' : (!r.place || r.place.level === 'country')) todo.push(idx);
+      if (verified ? r.place?.precision !== 'exact' : (!r.place || r.place.level === 'country')) todo.push(idx);
     });
     if (todo.length) {
-      const { places, stats: aiStats } = await aiGeocode(todo.map((idx) => {
+      const { places, failed, stats: aiStats } = await aiGeocode(todo.map((idx) => {
         const s = usable[idx].snippet || {};
         return { title: s.title, tags: s.tags, description: s.description };
       }), ai);
       stats.ai = aiStats;
-      for (const [k, place] of places) {
-        const r = results[todo[k]];
-        const had = Boolean(r.place);
-        if (had && !aiFirst && place.level !== 'city') continue; // never trade a known country for an AI country
-        r.place = place;
-        if (had) stats.placedByRules--;
-        stats.placedByAI++;
-      }
+      todo.forEach((idx, k) => {
+        const r = results[idx];
+        const place = places.get(k);
+        if (place) {
+          if (r.place && !verified && place.level !== 'city') return; // hybrid: keep a known country
+          r.place = place;
+        } else if (verified && !failed.has(k) && r.place?.precision === 'place') {
+          r.place = countryCentroid(countries.get(usable[idx].snippet?.channelId)) || null;
+          stats.droppedByAI++;
+        }
+      });
     }
   }
+  stats.placedByRules = results.filter((r) => r.place && r.place.precision !== 'ai').length;
+  stats.placedByAI = results.filter((r) => r.place?.precision === 'ai').length;
   return { results, nextPageToken, stats };
 }
 
 function emptyStats() {
-  return { placedByRules: 0, placedByAI: 0, ai: null };
+  return { placedByRules: 0, placedByAI: 0, droppedByAI: 0, ai: null };
 }
 
 async function call(fetchImpl, endpoint, params) {
