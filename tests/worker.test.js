@@ -144,6 +144,7 @@ test('health check reports setup without revealing the key', async () => {
   assert.equal(res.status, 200);
   assert.equal(JSON.parse(body).youtubeKeySet, true);
   assert.equal(body.includes('test-key'), false);
+  assert.ok(JSON.parse(body).bindingNames.includes('"YOUTUBE_API_KEY"'));
   const missing = await handle(new Request('https://api.example/api/health'), { ALLOWED_ORIGINS: ORIGIN }, ctx());
   assert.equal((await missing.json()).youtubeKeySet, false);
 });

@@ -28,6 +28,8 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
       youtubeKeySet: Boolean(env.YOUTUBE_API_KEY),
       turnstileOn: Boolean(env.TURNSTILE_SECRET),
       allowedOrigins: (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
+      // Names only (quoted, so stray spaces show), to catch a mistyped secret name.
+      bindingNames: Object.keys(env).map((k) => JSON.stringify(k)),
     }, 200, cors);
   }
   if (url.pathname !== '/api/search') return json({ code: 'not_found' }, 404, cors);
