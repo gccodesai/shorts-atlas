@@ -1,5 +1,5 @@
 // Minimal YouTube Data API v3 client: three calls per search, no SDK.
-//   search.list   -> up to 50 short videos (its own 100-calls/day bucket)
+//   search.list   -> up to 50 short videos per page (its own 100-calls/day bucket)
 //   videos.list   -> duration, embeddable flag, recording location, tags (1 unit)
 //   channels.list -> channel country, for the country-level fallback (1 unit)
 import { locate } from './geocode.js';
@@ -11,13 +11,16 @@ const TIMEOUT_MS = 8000;
 export class QuotaError extends Error {}
 export class UpstreamError extends Error {}
 
-export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResults = 50 }) {
-  const search = await call(fetchImpl, 'search', {
+export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResults = 50, pageToken = null }) {
+  const params = {
     part: 'snippet', type: 'video', videoDuration: 'short', videoEmbeddable: 'true',
     safeSearch: 'strict', maxResults: String(maxResults), q: `${query} #shorts`, key: apiKey,
-  });
+  };
+  if (pageToken) params.pageToken = pageToken;
+  const search = await call(fetchImpl, 'search', params);
+  const nextPageToken = typeof search.nextPageToken === 'string' ? search.nextPageToken : null;
   const ids = (search.items || []).map((i) => i.id?.videoId).filter(Boolean);
-  if (!ids.length) return [];
+  if (!ids.length) return { results: [], nextPageToken: null };
 
   const videos = await call(fetchImpl, 'videos', {
     part: 'snippet,contentDetails,recordingDetails,status', id: ids.join(','), key: apiKey,
@@ -38,7 +41,7 @@ export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResult
     }
   }
 
-  return usable.map((v) => {
+  const results = usable.map((v) => {
     const s = v.snippet || {};
     return {
       id: v.id,
@@ -55,6 +58,7 @@ export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResult
       }),
     };
   });
+  return { results, nextPageToken };
 }
 
 async function call(fetchImpl, endpoint, params) {

@@ -14,7 +14,8 @@ function fakeYouTube({ quota = false } = {}) {
     calls.push(u);
     if (quota) return Response.json({ error: { errors: [{ reason: 'quotaExceeded' }] } }, { status: 403 });
     if (u.pathname.endsWith('/search')) {
-      return Response.json({ items: ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc', 'ddddddddddd'].map((videoId) => ({ id: { videoId } })) });
+      if (u.searchParams.get('pageToken') === 'PAGE2') return Response.json({ items: [] });
+      return Response.json({ nextPageToken: 'PAGE2', items: ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc', 'ddddddddddd'].map((videoId) => ({ id: { videoId } })) });
     }
     if (u.pathname.endsWith('/videos')) {
       return Response.json({ items: [
@@ -138,13 +139,31 @@ test('logs outcomes, never the query or IP', async () => {
   }
 });
 
+test('load more: passes the page token, caches pages separately, validates tokens', async () => {
+  const yt = fakeYouTube();
+  const cache = memoryCache();
+  const c = ctx();
+  const first = await (await handle(req({ q: 'street food' }), ENV, c, { fetch: yt.fetch, cache })).json();
+  await c.done();
+  assert.equal(first.nextPageToken, 'PAGE2');
+  const second = await (await handle(req({ q: 'street food', pageToken: 'PAGE2' }), ENV, ctx(), { fetch: yt.fetch, cache })).json();
+  assert.equal(second.cached, false); // not served from page 1's cache entry
+  assert.equal(second.results.length, 0);
+  assert.equal(second.nextPageToken, null);
+  assert.equal(yt.calls.at(-1).searchParams.get('pageToken'), 'PAGE2');
+  for (const bad of ['../etc', 'a b', 'x'.repeat(200), 42, { t: 1 }]) {
+    const res = await handle(req({ q: 'street food', pageToken: bad }), ENV, ctx(), { fetch: yt.fetch, cache });
+    assert.equal(res.status, 400, String(bad));
+  }
+});
+
 test('health check reports setup without revealing the key', async () => {
   const res = await handle(new Request('https://api.example/api/health'), ENV, ctx());
   const body = await res.text();
   assert.equal(res.status, 200);
   assert.equal(JSON.parse(body).youtubeKeySet, true);
   assert.equal(body.includes('test-key'), false);
-  assert.ok(JSON.parse(body).bindingNames.includes('"YOUTUBE_API_KEY"'));
+  assert.equal('bindingNames' in JSON.parse(body), false);
   const missing = await handle(new Request('https://api.example/api/health'), { ALLOWED_ORIGINS: ORIGIN }, ctx());
   assert.equal((await missing.json()).youtubeKeySet, false);
 });

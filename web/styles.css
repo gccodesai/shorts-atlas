@@ -79,6 +79,10 @@ h2 { margin: 0; font-family: Bricolage, Inter, sans-serif; font-weight: 600; fon
 .card-title { font-size: 13px; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card.selected .card-title { font-size: 14px; }
 .card-meta { font-size: 12px; color: var(--muted); }
+.card.more { align-self: stretch; }
+.more-btn { width: 100%; aspect-ratio: 9 / 16; border-radius: 14px; border: 2px dashed var(--line); background: transparent; color: var(--soft); font-size: 14px; font-weight: 600; cursor: pointer; }
+.more-btn:hover { border-color: var(--accent); color: var(--text); }
+.more-btn:disabled { cursor: progress; opacity: .7; }
 
 .foot { margin-top: auto; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); }
 

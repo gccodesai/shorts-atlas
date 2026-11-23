@@ -12,13 +12,13 @@ world map and plays them in place. Every pin says how sure we are about its loca
    ├─ search box: same guardrails as the server, live counter
    ├─ MapLibre + OpenFreeMap tiles, clustered pins
    └─ filmstrip of Shorts; pick one and the map flies to it; play via youtube-nocookie
-        │  POST /api/search {q, turnstileToken}
+        │  POST /api/search {q, pageToken?, turnstileToken?}
         ▼
  Cloudflare Worker  (the only place the YouTube key lives)
    1. origin check, body size limit, per-visitor rate limit, optional Turnstile
    2. guardrails: length, characters, personal details, injection, unsafe terms
-   3. cache (24 h, key = SHA-256 of the query) → repeat searches cost no quota
-   4. YouTube: search.list → videos.list → channels.list   (3 calls per new search)
+   3. cache (24 h, key = SHA-256 of query + page) → repeat searches cost no quota
+   4. YouTube: search.list → videos.list → channels.list   (3 calls per new page of 50)
    5. geocoder: recording location → place named in title/tags → channel country → unplaced
 ```
 
@@ -95,8 +95,13 @@ npx wrangler dev --var ALLOWED_ORIGINS:http://localhost:8080 --var YOUTUBE_API_K
 5. **(Optional) Turnstile:** create a free widget for your Pages domain, put the site key in
    `web/config.js` and add a `TURNSTILE_SECRET` secret to the Worker.
 
-**Free-tier budget:** YouTube allows 100 new searches a day by default; cached repeats are free.
-When the quota runs out the page says so plainly, and cached searches keep working.
+**Free-tier budget:** YouTube allows 100 search calls a day by default. Each search returns up to
+50 Shorts (fewer after dropping non-embeddable or over-3-minute videos). **Load more** fetches the
+next 50 only when someone asks, so quota is spent on demand; every page is cached, so repeats are
+free. When the quota runs out the page says so plainly, and cached searches keep working.
+
+**Setup check:** `GET /api/health` on the Worker shows whether the YouTube key is set (never its
+value) and which sites may call the API.
 
 ## Project structure
 

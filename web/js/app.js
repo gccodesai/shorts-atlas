@@ -12,7 +12,7 @@ const els = {
   status: $('map-status'), demo: $('demo-banner'), map: $('map'), turnstile: $('turnstile'),
 };
 
-const state = { results: [], selectedId: null, playingId: null };
+const state = { query: '', results: [], selectedId: null, playingId: null, nextPageToken: null, loadingMore: false };
 let map = null;
 let mapReady = false;
 let turnstileId = null;
@@ -39,6 +39,7 @@ async function runSearch(raw) {
   els.status.textContent = 'Searching…';
   try {
     const data = DEMO ? await demoSearch(v.query) : await apiSearch(v.query);
+    state.nextPageToken = DEMO ? null : data.nextPageToken || null;
     setResults(v.query, data.results || []);
     const url = new URL(location.href);
     url.searchParams.set('q', v.query);
@@ -52,8 +53,9 @@ async function runSearch(raw) {
   }
 }
 
-async function apiSearch(q) {
+async function apiSearch(q, pageToken = null) {
   const body = { q };
+  if (pageToken) body.pageToken = pageToken;
   if (CONFIG.turnstileSiteKey && window.turnstile && turnstileId !== null) {
     body.turnstileToken = window.turnstile.getResponse(turnstileId);
   }
@@ -78,25 +80,70 @@ async function demoSearch() {
 
 // ---------- results ----------
 function setResults(query, results) {
-  state.results = results.filter((r) => r && typeof r.id === 'string' || r?.demo);
+  state.query = query;
+  state.results = results.filter((r) => r && typeof r.id === 'string');
   state.selectedId = null;
   state.playingId = null;
   els.headline.textContent = `Where is the world filming “${query}”?`;
-  const placed = state.results.filter((r) => r.place);
-  const unplaced = state.results.length - placed.length;
-  els.status.textContent = state.results.length
-    ? `${state.results.length} Shorts · ${placed.length} on the map · ${unplaced} unplaced`
-    : 'No Shorts found. Try another word.';
-  els.stripCount.textContent = state.results.length ? `${state.results.length} results` : '';
+  updateCounts();
   els.empty.textContent = state.results.length ? '' : 'No Shorts found for that search.';
   els.empty.hidden = state.results.length > 0;
   renderStrip();
   updateMapData();
+  const placed = state.results.filter((r) => r.place);
   if (placed.length && mapReady) fitToResults(placed);
 }
 
+function updateCounts() {
+  const placed = state.results.filter((r) => r.place).length;
+  const unplaced = state.results.length - placed;
+  els.status.textContent = state.results.length
+    ? `${state.results.length} Shorts · ${placed} on the map · ${unplaced} unplaced`
+    : 'No Shorts found. Try another word.';
+  els.stripCount.textContent = state.results.length ? `${state.results.length} results` : '';
+}
+
+// Next page of results, only when asked for: each page costs one search from the daily quota.
+async function loadMore() {
+  if (!state.nextPageToken || state.loadingMore) return;
+  state.loadingMore = true;
+  renderStrip();
+  try {
+    const data = await apiSearch(state.query, state.nextPageToken);
+    const seen = new Set(state.results.map((r) => r.id));
+    const fresh = (data.results || []).filter((r) => r && typeof r.id === 'string' && !seen.has(r.id));
+    state.results.push(...fresh);
+    state.nextPageToken = data.nextPageToken || null;
+    updateCounts();
+    updateMapData();
+    els.status.textContent += fresh.length ? '' : ' · no new Shorts on that page';
+  } catch (err) {
+    els.error.textContent = err.message || 'Could not load more. Please try again.';
+  } finally {
+    state.loadingMore = false;
+    if (turnstileId !== null && window.turnstile) window.turnstile.reset(turnstileId);
+    renderStrip();
+  }
+}
+
 function renderStrip() {
-  els.strip.replaceChildren(...[...sorted()].map(renderCard));
+  const cards = [...sorted()].map(renderCard);
+  if (state.nextPageToken && state.results.length) cards.push(renderLoadMore());
+  els.strip.replaceChildren(...cards);
+}
+
+function renderLoadMore() {
+  const wrap = document.createElement('div');
+  wrap.className = 'card more';
+  wrap.setAttribute('role', 'listitem');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'more-btn';
+  btn.disabled = state.loadingMore;
+  btn.textContent = state.loadingMore ? 'Loading…' : 'Load more Shorts';
+  btn.addEventListener('click', loadMore);
+  wrap.append(btn);
+  return wrap;
 }
 
 // Placed Shorts first, unplaced at the end of the strip.

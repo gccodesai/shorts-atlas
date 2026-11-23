@@ -1,4 +1,4 @@
-// Cloudflare Worker: POST /api/search  {q, turnstileToken?}
+// Cloudflare Worker: POST /api/search  {q, pageToken?, turnstileToken?}
 // The only component that holds the YouTube key. Order of checks:
 // method/origin/size -> rate limit -> Turnstile -> guardrails -> cache -> YouTube.
 import { validateQuery } from './guardrails.js';
@@ -6,6 +6,7 @@ import { searchShorts, QuotaError } from './youtube.js';
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24; // repeat searches cost no quota for a day
 const MAX_BODY_BYTES = 2048;
+const PAGE_TOKEN = /^[A-Za-z0-9_-]{1,128}$/;
 const RATE = { limit: 20, windowMs: 10 * 60 * 1000 }; // per visitor, per Worker instance
 const hits = new Map(); // hashed IP -> {count, reset}. In memory only, never logged.
 
@@ -28,8 +29,6 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
       youtubeKeySet: Boolean(env.YOUTUBE_API_KEY),
       turnstileOn: Boolean(env.TURNSTILE_SECRET),
       allowedOrigins: (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
-      // Names only (quoted, so stray spaces show), to catch a mistyped secret name.
-      bindingNames: Object.keys(env).map((k) => JSON.stringify(k)),
     }, 200, cors);
   }
   if (url.pathname !== '/api/search') return json({ code: 'not_found' }, 404, cors);
@@ -65,8 +64,14 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
     return json({ code: v.code, message: v.message }, 400, cors);
   }
 
+  // "Load more": YouTube's opaque page token. Only its own alphabet is accepted.
+  const pageToken = body.pageToken ?? null;
+  if (pageToken !== null && (typeof pageToken !== 'string' || !PAGE_TOKEN.test(pageToken))) {
+    return json({ code: 'bad_page', message: 'Bad request.' }, 400, cors);
+  }
+
   const cache = deps.cache ?? globalThis.caches?.default;
-  const cacheKey = new Request(`https://cache.shorts-atlas/v1/${await sha256(v.key)}`);
+  const cacheKey = new Request(`https://cache.shorts-atlas/v2/${await sha256(v.key + '\n' + (pageToken || ''))}`);
   if (cache) {
     const hit = await cache.match(cacheKey);
     if (hit) {
@@ -78,8 +83,8 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
 
   if (!env.YOUTUBE_API_KEY) return json({ code: 'config', message: 'The search service is not configured.' }, 500, cors);
   try {
-    const results = await searchShorts(v.query, { apiKey: env.YOUTUBE_API_KEY, fetchImpl: deps.fetch || fetch });
-    const data = { query: v.query, results, fetchedAt: new Date().toISOString() };
+    const { results, nextPageToken } = await searchShorts(v.query, { apiKey: env.YOUTUBE_API_KEY, fetchImpl: deps.fetch || fetch, pageToken });
+    const data = { query: v.query, results, nextPageToken, fetchedAt: new Date().toISOString() };
     if (cache) {
       ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(data), {
         headers: { 'Content-Type': 'application/json', 'Cache-Control': `public, max-age=${CACHE_TTL_SECONDS}` },
