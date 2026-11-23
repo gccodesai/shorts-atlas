@@ -75,7 +75,7 @@ To search real YouTube locally, run the Worker in a second terminal and point
 `web/config.js` at it (`apiUrl: 'http://localhost:8787/api/search'`):
 
 ```bash
-cd worker && npx wrangler dev --var YOUTUBE_API_KEY:your-key
+npx wrangler dev --var YOUTUBE_API_KEY:your-key
 ```
 
 ## Deploy for free
@@ -83,15 +83,17 @@ cd worker && npx wrangler dev --var YOUTUBE_API_KEY:your-key
 1. **YouTube API key:** [Google Cloud Console](https://console.cloud.google.com/) → new project →
    enable **YouTube Data API v3** → Credentials → **API key**. No billing account needed.
    Restrict the key to the YouTube Data API.
-2. **Worker:** `cd worker && npx wrangler login && npx wrangler secret put YOUTUBE_API_KEY && npx wrangler deploy`.
+2. **Worker (no local install):** Cloudflare dashboard → Workers & Pages → Create application →
+   import this repo, name it `shorts-atlas-api` (must match `wrangler.toml`), Deploy. Then
+   Settings → Variables and Secrets → add a **Secret** `YOUTUBE_API_KEY`. Every push redeploys.
    Note the `https://shorts-atlas-api.<you>.workers.dev` URL.
 3. **Front end:** Cloudflare dashboard → Workers & Pages → Create → Pages → connect this repo,
    build output directory `web`, no build command. Put your Pages URL in `ALLOWED_ORIGINS`
-   in `worker/wrangler.toml` and redeploy the Worker.
+   in `wrangler.toml` and push.
 4. Set `apiUrl` in `web/config.js` to the Worker URL plus `/api/search`, and replace
    `https://*.workers.dev` in `web/_headers` with that exact URL.
 5. **(Optional) Turnstile:** create a free widget for your Pages domain, put the site key in
-   `web/config.js` and run `npx wrangler secret put TURNSTILE_SECRET`.
+   `web/config.js` and add a `TURNSTILE_SECRET` secret to the Worker.
 
 **Free-tier budget:** YouTube allows 100 new searches a day by default; cached repeats are free.
 When the quota runs out the page says so plainly, and cached searches keep working.
@@ -105,6 +107,7 @@ worker/src/
   youtube.js      # 3-call YouTube client, Shorts filter (≤ 3 min, embeddable)
   geocode.js      # recording location → place name → channel country
   gazetteer.json  # built by scripts/build-gazetteer.mjs
+wrangler.toml     # Worker config (kept at the repo root for one-click Git deploys)
 web/
   index.html, styles.css, js/app.js, config.js, _headers, demo-data.json
   vendor/         # MapLibre GL (CSP build), self-hosted

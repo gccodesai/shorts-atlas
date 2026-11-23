@@ -8,7 +8,7 @@
     "build:gazetteer": "node scripts/build-gazetteer.mjs",
     "vendor": "cp node_modules/maplibre-gl/dist/maplibre-gl-csp.js node_modules/maplibre-gl/dist/maplibre-gl-csp-worker.js node_modules/maplibre-gl/dist/maplibre-gl.css node_modules/maplibre-gl/dist/LICENSE.txt web/vendor/",
     "serve": "npx --yes http-server web -p 8080 -c-1",
-    "deploy": "cd worker && npx wrangler deploy"
+    "deploy": "npx wrangler deploy"
   },
   "license": "MIT",
   "devDependencies": {
