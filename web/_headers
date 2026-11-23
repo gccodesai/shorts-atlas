@@ -1,9 +1,9 @@
 # Cloudflare Pages security headers.
-# connect-src: replace the workers.dev entry with your Worker's exact URL once deployed.
+# connect-src: only our own Worker and the map tiles.
 # style-src keeps 'unsafe-inline' because MapLibre and Turnstile set inline styles;
 # scripts stay strict: no inline scripts, no eval, only our own files and Turnstile.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://i.ytimg.com; font-src 'self'; connect-src 'self' https://tiles.openfreemap.org https://*.workers.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-src https://www.youtube-nocookie.com https://challenges.cloudflare.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://i.ytimg.com; font-src 'self'; connect-src 'self' https://tiles.openfreemap.org https://shorts-atlas-api.gauravhbo.workers.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-src https://www.youtube-nocookie.com https://challenges.cloudflare.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
   Referrer-Policy: strict-origin-when-cross-origin
   X-Content-Type-Options: nosniff
   Permissions-Policy: geolocation=(), camera=(), microphone=(), interest-cohort=()

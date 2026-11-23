@@ -3,7 +3,7 @@
 Type a word, song title or theme. Shorts Atlas finds YouTube Shorts about it, puts them on a
 world map and plays them in place. Every pin says how sure we are about its location.
 
-**Live demo:** _add your Pages link_ · **Cost to run:** $0
+**Live demo:** [shorts-atlas.pages.dev](https://shorts-atlas.pages.dev) · **Cost to run:** $0
 
 ## How it works
 
@@ -75,7 +75,7 @@ To search real YouTube locally, run the Worker in a second terminal and point
 `web/config.js` at it (`apiUrl: 'http://localhost:8787/api/search'`):
 
 ```bash
-npx wrangler dev --var YOUTUBE_API_KEY:your-key
+npx wrangler dev --var ALLOWED_ORIGINS:http://localhost:8080 --var YOUTUBE_API_KEY:your-key
 ```
 
 ## Deploy for free
