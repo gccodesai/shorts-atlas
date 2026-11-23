@@ -8,7 +8,7 @@
 :root {
   --bg: #141210; --panel: #1B1815; --raised: #1E1A17; --land: #2C2622; --line: #3A332D;
   --text: #F4EEE6; --muted: #B5ABA0; --soft: #D9D0C5;
-  --accent: #FF6B4A; --accent-ink: #1A0A05; --link: #FF8A6E; --error: #FFB4A2;
+  --accent: #FF6B4A; --ai: #C4B5FD; --accent-ink: #1A0A05; --link: #FF8A6E; --error: #FFB4A2;
 }
 * { box-sizing: border-box; }
 html { color-scheme: dark; }
@@ -48,6 +48,8 @@ h1 { margin: 0; font-family: Bricolage, Inter, sans-serif; font-weight: 800; fon
 .dot.exact { background: var(--accent); }
 .dot.place { border: 2px solid var(--accent); }
 .dot.country { border: 2px dashed var(--muted); }
+.dot.ai { border: 2px solid var(--ai); box-shadow: inset 0 0 0 2px var(--bg), inset 0 0 0 5px var(--ai); }
+.card-meta .ai-tag { color: var(--ai); }
 .map-status { position: absolute; right: 20px; bottom: 30px; margin: 0; padding: 6px 12px; border-radius: 999px; background: var(--bg); font-size: 13px; color: var(--soft); }
 .map-status:empty { display: none; }
 .demo-banner { position: absolute; left: 50%; top: 20px; transform: translateX(-50%); margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 600; white-space: nowrap; }

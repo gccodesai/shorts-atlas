@@ -3,7 +3,7 @@ import { validateQuery, MAX_CHARS } from './guardrails.js';
 const CONFIG = window.SHORTS_ATLAS_CONFIG || {};
 const DEMO = !CONFIG.apiUrl;
 const YT_ID = /^[\w-]{11}$/;
-const PRECISION_LABEL = { exact: 'Exact', place: 'Place name', country: 'Country' };
+const PRECISION_LABEL = { exact: 'Exact', place: 'Place name', country: 'Country', ai: 'AI-inferred' };
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -97,8 +97,9 @@ function setResults(query, results) {
 function updateCounts() {
   const placed = state.results.filter((r) => r.place).length;
   const unplaced = state.results.length - placed;
+  const byAI = state.results.filter((r) => r.place?.precision === 'ai').length;
   els.status.textContent = state.results.length
-    ? `${state.results.length} Shorts · ${placed} on the map · ${unplaced} unplaced`
+    ? `${state.results.length} Shorts · ${placed} on the map${byAI ? ` (${byAI} by AI)` : ''} · ${unplaced} unplaced`
     : 'No Shorts found. Try another word.';
   els.stripCount.textContent = state.results.length ? `${state.results.length} results` : '';
 }
@@ -210,7 +211,14 @@ function renderCard(r) {
   title.textContent = r.title || 'Untitled Short';
   const meta = document.createElement('span');
   meta.className = 'card-meta';
-  meta.textContent = r.place ? `${r.place.label} · ${PRECISION_LABEL[r.place.precision] || ''}` : 'Unplaced';
+  if (!r.place) meta.textContent = 'Unplaced';
+  else if (r.place.precision === 'ai') {
+    meta.append(`${r.place.label} · `);
+    const tag = document.createElement('span');
+    tag.className = 'ai-tag';
+    tag.textContent = r.place.evidence ? `AI, from “${r.place.evidence}”` : 'AI-inferred';
+    meta.append(tag);
+  } else meta.textContent = `${r.place.label} · ${PRECISION_LABEL[r.place.precision] || ''}`;
   text.append(title, meta);
   text.setAttribute('aria-pressed', String(r.id === state.selectedId));
   text.addEventListener('click', () => select(r.id));
@@ -298,9 +306,13 @@ function addLayers(m) {
     paint: {
       'circle-radius': 8,
       'circle-color': ['match', ['get', 'precision'], 'exact', '#FF6B4A', '#141210'],
-      'circle-stroke-color': ['match', ['get', 'precision'], 'country', '#B5ABA0', '#FF6B4A'],
+      'circle-stroke-color': ['match', ['get', 'precision'], 'country', '#B5ABA0', 'ai', '#C4B5FD', '#FF6B4A'],
       'circle-stroke-width': ['match', ['get', 'precision'], 'exact', 0, 3],
     } });
+  // AI-inferred pins get a centre dot so they read differently from place-name pins, not by colour alone.
+  m.addLayer({ id: 'points-ai-dot', type: 'circle', source: 'shorts',
+    filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'precision'], 'ai']],
+    paint: { 'circle-radius': 3, 'circle-color': '#C4B5FD' } });
   m.addLayer({ id: 'selected', type: 'circle', source: 'shorts', filter: ['==', ['get', 'id'], ''],
     paint: { 'circle-radius': 12, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': '#F4EEE6', 'circle-stroke-width': 3 } });
 

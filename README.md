@@ -1,7 +1,8 @@
 # 🌍 Shorts Atlas: where is the world filming it?
 
 Type a word, song title or theme. Shorts Atlas finds YouTube Shorts about it, puts them on a
-world map and plays them in place. Every pin says how sure we are about its location.
+world map and plays them in place. Every pin says how sure we are about its location, and an
+**AI geocoder**, measured against a rule-based baseline, places the Shorts that rules can't.
 
 **Live demo:** [shorts-atlas.pages.dev](https://shorts-atlas.pages.dev) · **Cost to run:** $0
 
@@ -20,6 +21,8 @@ world map and plays them in place. Every pin says how sure we are about its loca
    3. cache (24 h, key = SHA-256 of query + page) → repeat searches cost no quota
    4. YouTube: search.list → videos.list → channels.list   (3 calls per new page of 50)
    5. geocoder: recording location → place named in title/tags → channel country → unplaced
+   6. AI geocoder (Workers AI, one batched call): Shorts still unplaced or country-only
+      → proposed place must quote its evidence from the text and resolve to a real town
 ```
 
 ### Honest locations
@@ -29,11 +32,68 @@ world map and plays them in place. Every pin says how sure we are about its loca
 | ● **Exact** | The creator set a recording location on the video |
 | ○ **Place name** | A city or country named in the title, hashtags or tags (2,921 cities ≥150k people + 250 countries, from GeoNames) |
 | ◌ **Country** | Only the channel's country is known; pinned at the country's centre |
+| ◉ **AI-inferred** | An LLM read the title, tags and description and named a place, **quoting the words it relied on** (shown on the card). Accepted only if that quote is really in the text and the place is a real town (≥15k people, GeoNames) or country |
 | _Unplaced_ | Shown in the strip, never put on the map at a made-up spot |
 
 The text matcher only looks at capitalized words and hashtags, prefers cities over countries
 and larger cities over smaller ones, and skips city names that are also common English words
 (Nice, Reading, Mobile…).
+
+## AI geocoder
+
+Rules are fast and precise but brittle: they miss other scripts (東京, Sài Gòn), landmarks
+("under the Eiffel Tower"), lowercase titles and small towns, and they are fooled by look-alike
+names ("Paris Hilton", "Jordan 1 restock"). The AI geocoder is a second pass for exactly the
+videos the rules could not place, or placed only at country level.
+
+**How it works** ([`worker/src/aigeo.js`](worker/src/aigeo.js))
+- **One batched call per search**, not one per video, to `@cf/meta/llama-3.1-8b-instruct-fp8-fast`
+  on Workers AI (free daily allowance, no key; the model is configurable with `AI_MODEL`).
+- **JSON mode with a schema**, temperature 0. The model returns `{i, city, country, evidence}`.
+- **Trust nothing it says:** a proposal is accepted only if `evidence` appears verbatim in that
+  video's own text (stops invented places) and the city resolves to a real town in that country
+  (or falls back to the country). Bad indexes, duplicates and unknown countries are dropped and counted.
+- **Untrusted input:** titles and descriptions are written by strangers. They are redacted
+  (emails, links, @handles, long numbers) before leaving the Worker, fenced as escaped JSON inside
+  `<videos>` tags so they can't close the fence, and the system prompt tells the model they are data.
+- **Fails soft:** a 10 s deadline; if the model is slow, down or returns junk, the search still
+  returns the rule-based results. Every response reports `placedByRules`, `placedByAI` and AI timing.
+
+**Budget:** a 50-video batch is a few thousand input tokens, well under 100 Neurons with the 8B
+model, against a free 10,000 Neurons/day. YouTube's 100 searches/day runs out long before the AI does.
+
+## Evals
+
+[`evals/cases.jsonl`](evals/cases.jsonl) holds 82 hand-labelled cases across 11 categories:
+plain city names, hashtags, 12 other languages and scripts, landmarks, small towns, lowercase titles,
+countries and cuisines, no location, look-alike names, injection attempts and personal details.
+**It is a stress set built around known failure modes, not a random sample of YouTube,** so the
+absolute numbers are harsher than real traffic; what matters is the comparison between pipelines.
+A unit test checks that every expected place resolves in the app's own place list, so labels can't drift.
+
+```bash
+npm run eval                                   # rules only, offline (also runs in CI)
+npm run eval:ai -- --models <model1>,<model2>  # + AI only and hybrid, needs Workers AI credentials
+```
+
+Or with nothing installed: **Actions → Geocoder evals → Run workflow** (uses the repo secrets
+`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`) and the results are committed to
+[`evals/results/latest.md`](evals/results/latest.md).
+
+Metrics: **useful pins** (right place ÷ all videos that name one: the headline), coverage,
+precision (within 50 km, or right country when only a country is named), right-country rate,
+**false placements** (videos with no real place that got a pin anyway), AI calls, Neurons and time.
+
+### Results so far
+
+| Pipeline | Useful pins | Coverage | Precision | False placements |
+|---|---|---|---|---|
+| Rules only | 39% | 40% | 96% | 40% |
+| AI only / Hybrid | _run the eval workflow_ | | | |
+
+The baseline is the story: when rules place something they're almost always right (96%), but they
+place only 40% of videos that name a place (0/12 in other scripts, 0/13 landmarks) and pin 40% of
+no-location videos anyway ("Paris Hilton" → Paris, "Florida Georgia Line" → Georgia).
 
 ## Guardrails
 
@@ -67,7 +127,7 @@ percentile of title lengths in a public music dataset)._
 ```bash
 git clone https://github.com/gccodesai/shorts-atlas.git && cd shorts-atlas
 npm install
-npm test                 # 26 tests, offline, fake YouTube API
+npm test                 # 40 tests, offline, fake YouTube API and fake model
 npm run serve            # http://localhost:8080 (demo mode: sample places, no API key needed)
 ```
 
@@ -111,23 +171,30 @@ worker/src/
   guardrails.js   # input checks, shared with the browser
   youtube.js      # 3-call YouTube client, Shorts filter (≤ 3 min, embeddable)
   geocode.js      # recording location → place name → channel country
+  aigeo.js        # AI geocoder: batched Workers AI call, evidence + gazetteer validation
+  towns.json      # towns ≥15k people, used only to validate AI answers
   gazetteer.json  # built by scripts/build-gazetteer.mjs
 wrangler.toml     # Worker config (kept at the repo root for one-click Git deploys)
 web/
   index.html, styles.css, js/app.js, config.js, _headers, demo-data.json
   vendor/         # MapLibre GL (CSP build), self-hosted
-tests/            # node:test, no network
+evals/
+  cases.jsonl     # 82 hand-labelled stress cases
+  run.mjs         # rules vs AI vs hybrid, writes results/latest.md
+tests/            # node:test, no network, fake YouTube and fake model
 ```
 
 ## Roadmap
 
 - [ ] Derive the length cap from title-length data
 - [ ] Shareable result links with a preview image
-- [ ] LLM geocoder for titles the gazetteer misses, measured against the rule-based one
+- [x] LLM geocoder for titles the gazetteer misses, measured against the rule-based one
+- [ ] Let the AI veto rule-based look-alike matches ("Paris Hilton"), if the evals show it helps
+- [ ] A second eval set sampled from real searches, labelled by hand
 - [ ] Instagram Reels as a second source, if Meta approves API access
 
 ## Credits & license
 
-Video data: YouTube Data API. Map: [OpenFreeMap](https://openfreemap.org), © OpenMapTiles,
+Video data: YouTube Data API. AI: Cloudflare Workers AI (Llama 3.1 8B). Map: [OpenFreeMap](https://openfreemap.org), © OpenMapTiles,
 © OpenStreetMap contributors. Places: GeoNames (CC BY 4.0) via `all-the-cities` and
 `world-countries`. Map library: MapLibre GL (BSD-3). Code: MIT.

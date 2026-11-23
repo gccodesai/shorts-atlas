@@ -49,7 +49,7 @@ export function placeFromText(text) {
   // Prefer a city over a country, then the larger city.
   candidates.sort((a, b) => (b.kind === 'city') - (a.kind === 'city') || (b.pop || 0) - (a.pop || 0));
   const best = candidates[0];
-  return { lat: best.lat, lon: best.lon, label: best.label, precision: 'place' };
+  return { lat: best.lat, lon: best.lon, label: best.label, cc: best.cc, precision: 'place', level: best.kind === 'city' ? 'city' : 'country' };
 }
 
 function lookup(k) {
@@ -88,9 +88,15 @@ export function nearestCityLabel(lat, lon) {
   return bestD < 150 ? `Near ${cityLabel(best)}` : 'Pinned location';
 }
 
+export function countryByCode(cc) {
+  return (typeof cc === 'string' && COUNTRY_BY_CODE.get(cc.toUpperCase())) || null;
+}
+
+export { norm, cityLabel };
+
 export function countryCentroid(cc) {
   const c = cc && COUNTRY_BY_CODE.get(cc.toUpperCase());
-  return c ? { lat: c.lat, lon: c.lon, label: c.name, precision: 'country' } : null;
+  return c ? { lat: c.lat, lon: c.lon, label: c.name, cc: c.cc, precision: 'country', level: 'country' } : null;
 }
 
 /** Pick the best position available for a video. */
@@ -99,7 +105,7 @@ export function locate({ recording, title, tags, description, channelCountry }) 
   if (loc && Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude) &&
       Math.abs(loc.latitude) <= 90 && Math.abs(loc.longitude) <= 180 &&
       !(loc.latitude === 0 && loc.longitude === 0)) {
-    return { lat: loc.latitude, lon: loc.longitude, label: nearestCityLabel(loc.latitude, loc.longitude), precision: 'exact' };
+    return { lat: loc.latitude, lon: loc.longitude, label: nearestCityLabel(loc.latitude, loc.longitude), precision: 'exact', level: 'exact' };
   }
   const text = [title, (tags || []).map((t) => '#' + t.replace(/\s+/g, '')).join(' '), (description || '').slice(0, 500)].join(' \n ');
   return placeFromText(text) || countryCentroid(channelCountry) || null;

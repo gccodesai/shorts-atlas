@@ -3,6 +3,7 @@
 // method/origin/size -> rate limit -> Turnstile -> guardrails -> cache -> YouTube.
 import { validateQuery } from './guardrails.js';
 import { searchShorts, QuotaError } from './youtube.js';
+import { DEFAULT_MODEL } from './aigeo.js';
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24; // repeat searches cost no quota for a day
 const MAX_BODY_BYTES = 2048;
@@ -28,6 +29,8 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
       ok: Boolean(env.YOUTUBE_API_KEY),
       youtubeKeySet: Boolean(env.YOUTUBE_API_KEY),
       turnstileOn: Boolean(env.TURNSTILE_SECRET),
+      aiGeocoder: Boolean(aiOptions(env)),
+      aiModel: aiOptions(env)?.model || null,
       allowedOrigins: (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
     }, 200, cors);
   }
@@ -71,7 +74,7 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
   }
 
   const cache = deps.cache ?? globalThis.caches?.default;
-  const cacheKey = new Request(`https://cache.shorts-atlas/v2/${await sha256(v.key + '\n' + (pageToken || ''))}`);
+  const cacheKey = new Request(`https://cache.shorts-atlas/v3/${await sha256(v.key + '\n' + (pageToken || ''))}`);
   if (cache) {
     const hit = await cache.match(cacheKey);
     if (hit) {
@@ -83,14 +86,18 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
 
   if (!env.YOUTUBE_API_KEY) return json({ code: 'config', message: 'The search service is not configured.' }, 500, cors);
   try {
-    const { results, nextPageToken } = await searchShorts(v.query, { apiKey: env.YOUTUBE_API_KEY, fetchImpl: deps.fetch || fetch, pageToken });
-    const data = { query: v.query, results, nextPageToken, fetchedAt: new Date().toISOString() };
+    const { results, nextPageToken, stats } = await searchShorts(v.query, {
+      apiKey: env.YOUTUBE_API_KEY, fetchImpl: deps.fetch || fetch, pageToken, ai: deps.ai ?? aiOptions(env),
+    });
+    const data = { query: v.query, results, nextPageToken, stats: publicStats(stats), fetchedAt: new Date().toISOString() };
     if (cache) {
       ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(data), {
         headers: { 'Content-Type': 'application/json', 'Cache-Control': `public, max-age=${CACHE_TTL_SECONDS}` },
       })));
     }
-    log({ outcome: 'ok', cached: false, n: results.length, ms: Date.now() - started });
+    log({ outcome: 'ok', cached: false, n: results.length, rules: stats.placedByRules, ai: stats.placedByAI,
+      aiTried: stats.ai?.tried ?? 0, aiRejected: stats.ai?.rejected ?? null, aiMs: stats.ai?.ms ?? 0, aiError: stats.ai?.error ?? null,
+      ms: Date.now() - started });
     return json({ ...data, cached: false }, 200, cors);
   } catch (e) {
     if (e instanceof QuotaError) {
@@ -100,6 +107,19 @@ export async function handle(request, env, ctx = { waitUntil() {} }, deps = {}) 
     log({ outcome: 'error', error: String(e?.message || e).slice(0, 120), ms: Date.now() - started });
     return json({ code: 'upstream', message: 'YouTube did not respond. Please try again.' }, 502, cors);
   }
+}
+
+function aiOptions(env) {
+  if (!env.AI || env.AI_GEOCODER === 'off') return null;
+  return { run: (model, input) => env.AI.run(model, input), model: env.AI_MODEL || DEFAULT_MODEL };
+}
+
+function publicStats(stats) {
+  return {
+    placedByRules: stats.placedByRules,
+    placedByAI: stats.placedByAI,
+    ai: stats.ai ? { tried: stats.ai.tried, accepted: stats.ai.accepted, ms: stats.ai.ms, model: stats.ai.model, failed: Boolean(stats.ai.error) } : null,
+  };
 }
 
 function corsHeaders(origin, env) {

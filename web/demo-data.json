@@ -265,26 +265,47 @@
   {
    "id": "demo-u1",
    "demo": true,
-   "title": "Sample Short with no location 1",
+   "title": "Sample Short · Hoi An night market",
    "channel": "Sample channel",
    "thumb": null,
-   "place": null
+   "place": {
+    "lat": 15.88,
+    "lon": 108.338,
+    "label": "Hội An, Vietnam",
+    "precision": "ai",
+    "level": "city",
+    "evidence": "Hoi An night market"
+   }
   },
   {
    "id": "demo-u2",
    "demo": true,
-   "title": "Sample Short with no location 2",
+   "title": "Sample Short · Pub Street",
    "channel": "Sample channel",
    "thumb": null,
-   "place": null
+   "place": {
+    "lat": 13.362,
+    "lon": 103.86,
+    "label": "Siem Reap, Cambodia",
+    "precision": "ai",
+    "level": "city",
+    "evidence": "Pub Street"
+   }
   },
   {
    "id": "demo-u3",
    "demo": true,
-   "title": "Sample Short with no location 3",
+   "title": "Sample Short · mercado 20 de Noviembre",
    "channel": "Sample channel",
    "thumb": null,
-   "place": null
+   "place": {
+    "lat": 17.061,
+    "lon": -96.725,
+    "label": "Oaxaca, Mexico",
+    "precision": "ai",
+    "level": "city",
+    "evidence": "mercado 20 de Noviembre"
+   }
   },
   {
    "id": "demo-u4",

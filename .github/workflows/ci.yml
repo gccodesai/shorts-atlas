@@ -9,3 +9,5 @@ jobs:
         with: { node-version: 22 }
       - run: npm ci
       - run: npm test
+      - name: Offline geocoder eval (rules only, no keys)
+        run: node evals/run.mjs > /dev/null && cat evals/results/latest.md >> "$GITHUB_STEP_SUMMARY"

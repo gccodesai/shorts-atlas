@@ -1,4 +1,4 @@
-// Builds worker/src/gazetteer.json from GeoNames-derived npm packages.
+// Builds worker/src/gazetteer.json and towns.json from GeoNames-derived npm packages.
 // Cities with population >= 150k (keeps the Worker bundle small and cuts
 // ambiguous small-town names) plus every country with its centroid.
 import { createRequire } from 'node:module';
@@ -30,3 +30,13 @@ for (const c of countries) {
 }
 writeFileSync(new URL('../worker/src/gazetteer.json', import.meta.url), JSON.stringify(out));
 console.log(`cities: ${out.cities.length}, countries: ${out.countries.length}`);
+
+// Towns >= 15k people: used only to VALIDATE places the AI geocoder names
+// (never for free-text matching, where small-town names cause false hits).
+const TOWN_MIN_POP = 15000;
+const r3 = (n) => Math.round(n * 1e3) / 1e3;
+const towns = cities.filter((c) => c.population >= TOWN_MIN_POP)
+  .map((c) => [c.name, r3(c.loc.coordinates[1]), r3(c.loc.coordinates[0]), c.country, c.population])
+  .sort((a, b) => b[4] - a[4]);
+writeFileSync(new URL('../worker/src/towns.json', import.meta.url), JSON.stringify(towns));
+console.log(`towns: ${towns.length}`);

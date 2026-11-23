@@ -2,12 +2,18 @@ name = "shorts-atlas-api"
 main = "worker/src/index.js"
 compatibility_date = "2026-11-01"
 
+# Workers AI, for the AI geocoder (free daily allowance; no key needed).
+[ai]
+binding = "AI"
+
 [vars]
+# Set to "off" to turn the AI geocoder off. AI_MODEL overrides the default model.
+AI_GEOCODER = "on"
 # Comma-separated list of sites allowed to call the API. For local testing:
 # npx wrangler dev --var ALLOWED_ORIGINS:http://localhost:8080 --var YOUTUBE_API_KEY:your-key
 ALLOWED_ORIGINS = "https://shorts-atlas.pages.dev"
 
-# Secrets (set with `npx wrangler secret put NAME`, never committed):
+# Secrets: Cloudflare dashboard > Worker > Settings > Variables and Secrets (type Secret), never committed:
 #   YOUTUBE_API_KEY   required
 #   TURNSTILE_SECRET  optional, turns on the bot check
 #   RATE_SALT         optional, any random string

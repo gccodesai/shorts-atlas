@@ -3,6 +3,7 @@
 //   videos.list   -> duration, embeddable flag, recording location, tags (1 unit)
 //   channels.list -> channel country, for the country-level fallback (1 unit)
 import { locate } from './geocode.js';
+import { aiGeocode } from './aigeo.js';
 
 const API = 'https://www.googleapis.com/youtube/v3';
 const MAX_SHORT_SECONDS = 180; // Shorts can be up to 3 minutes
@@ -11,7 +12,7 @@ const TIMEOUT_MS = 8000;
 export class QuotaError extends Error {}
 export class UpstreamError extends Error {}
 
-export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResults = 50, pageToken = null }) {
+export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResults = 50, pageToken = null, ai = null }) {
   const params = {
     part: 'snippet', type: 'video', videoDuration: 'short', videoEmbeddable: 'true',
     safeSearch: 'strict', maxResults: String(maxResults), q: `${query} #shorts`, key: apiKey,
@@ -20,7 +21,7 @@ export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResult
   const search = await call(fetchImpl, 'search', params);
   const nextPageToken = typeof search.nextPageToken === 'string' ? search.nextPageToken : null;
   const ids = (search.items || []).map((i) => i.id?.videoId).filter(Boolean);
-  if (!ids.length) return { results: [], nextPageToken: null };
+  if (!ids.length) return { results: [], nextPageToken: null, stats: emptyStats() };
 
   const videos = await call(fetchImpl, 'videos', {
     part: 'snippet,contentDetails,recordingDetails,status', id: ids.join(','), key: apiKey,
@@ -58,7 +59,36 @@ export async function searchShorts(query, { apiKey, fetchImpl = fetch, maxResult
       }),
     };
   });
-  return { results, nextPageToken };
+  const stats = emptyStats();
+  for (const r of results) if (r.place) stats.placedByRules++;
+
+  // Second pass: the AI geocoder reads videos the rules missed, or placed only at country level.
+  if (ai?.run) {
+    const todo = [];
+    results.forEach((r, idx) => {
+      if (!r.place || r.place.level === 'country' || r.place.precision === 'country') todo.push(idx);
+    });
+    if (todo.length) {
+      const { places, stats: aiStats } = await aiGeocode(todo.map((idx) => {
+        const s = usable[idx].snippet || {};
+        return { title: s.title, tags: s.tags, description: s.description };
+      }), ai);
+      stats.ai = aiStats;
+      for (const [k, place] of places) {
+        const r = results[todo[k]];
+        const had = Boolean(r.place);
+        if (had && place.level !== 'city') continue; // never trade a known country for an AI country
+        r.place = place;
+        if (had) stats.placedByRules--;
+        stats.placedByAI++;
+      }
+    }
+  }
+  return { results, nextPageToken, stats };
+}
+
+function emptyStats() {
+  return { placedByRules: 0, placedByAI: 0, ai: null };
 }
 
 async function call(fetchImpl, endpoint, params) {

@@ -157,6 +157,33 @@ test('load more: passes the page token, caches pages separately, validates token
   }
 });
 
+test('AI geocoder places what the rules missed and refines country-level answers', async () => {
+  const yt = fakeYouTube();
+  // videos: a=exact (not sent), b=Mexico City by rules (not sent), c=channel country only (sent)
+  let sent;
+  const ai = { model: '@cf/test/model', run: async (model, input) => {
+    sent = input.messages[1].content;
+    return { response: { places: [{ i: 0, city: 'Lagos', country: 'NG', evidence: 'Snack' }] } };
+  } };
+  const data = await (await handle(req({ q: 'street food' }), ENV, ctx(), { fetch: yt.fetch, cache: memoryCache(), ai })).json();
+  assert.equal((sent.match(/"i":/g) || []).length, 1, 'only the unrefined video goes to the AI');
+  const c = data.results.find((r) => r.id === 'ccccccccccc');
+  assert.equal(c.place.precision, 'ai');
+  assert.equal(c.place.label, 'Lagos, Nigeria');
+  assert.deepEqual([data.stats.placedByRules, data.stats.placedByAI], [2, 1]);
+  assert.equal(data.stats.ai.accepted, 1);
+});
+
+test('an AI failure still returns the rule-based results', async () => {
+  const ai = { run: async () => { throw new Error('AI down'); } };
+  const res = await handle(req({ q: 'street food' }), ENV, ctx(), { fetch: fakeYouTube().fetch, cache: memoryCache(), ai });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.results.length, 3);
+  assert.equal(data.stats.ai.failed, true);
+  assert.equal(data.results.find((r) => r.id === 'ccccccccccc').place.precision, 'country');
+});
+
 test('health check reports setup without revealing the key', async () => {
   const res = await handle(new Request('https://api.example/api/health'), ENV, ctx());
   const body = await res.text();

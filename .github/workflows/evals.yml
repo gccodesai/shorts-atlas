@@ -1,0 +1,34 @@
+name: Geocoder evals
+# Runs the rules vs AI vs hybrid comparison on evals/cases.jsonl with Workers AI,
+# then commits evals/results/latest.md. Start it from the Actions tab.
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'Workers AI models, comma-separated'
+        default: '@cf/meta/llama-3.1-8b-instruct-fp8-fast'
+        required: true
+permissions:
+  contents: write
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: Run evals
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          MODELS: ${{ inputs.models }}
+        run: node evals/run.mjs --ai --models "$MODELS"
+      - run: cat evals/results/latest.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evals/results
+          git diff --cached --quiet || git commit -m "Update geocoder eval results [skip ci]"
+          git push
